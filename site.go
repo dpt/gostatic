@@ -103,8 +103,8 @@ func (site *Site) Summary() {
 			continue
 		}
 
-		out("%s - %s: %d chars; %s\n",
-			page.Path, page.Title, len(page.Content()), page.Rule)
+		out("%s - %s:%s: %d chars; %s\n",
+			page.Path, page.Section, page.Title, len(page.Content()), page.Rule)
 		out("------------")
 		_, err := page.WriteTo(os.Stdout)
 		errhandle(err)

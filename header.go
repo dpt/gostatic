@@ -13,6 +13,7 @@ import (
 
 type PageHeader struct {
 	Title     string
+	Section   []string
 	Tags      []string
 	Date      time.Time
 	PageOrder int `default:"-1000"`

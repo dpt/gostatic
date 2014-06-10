@@ -285,6 +285,7 @@ expands on that a bit:
 
 ----
 
+- `.Section` - list of page sections (foo > bar > baz).
 - `.Title` - page title.
 - `.Tags` - list of page tags.
 - `.Date` - page date, as defined in [page config](#page-config).
