@@ -6,15 +6,17 @@ package main
 import (
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 )
 
 type PageHeader struct {
-	Title string
-	Tags  []string
-	Date  time.Time
-	Other map[string]string
+	Title     string
+	Tags      []string
+	Date      time.Time
+	PageOrder int `default:"-1000"`
+	Other     map[string]string
 }
 
 var DATEFORMATS = []string{
@@ -61,6 +63,10 @@ func (cfg *PageHeader) SetValue(key string, value string, s *reflect.Value) {
 	switch f.Interface().(type) {
 	default:
 		errhandle(fmt.Errorf("Unknown type of field %s", key))
+	case int:
+		i, err := strconv.Atoi(strings.TrimSpace(value))
+		errhandle(err)
+		f.Set(reflect.ValueOf(i))
 	case string:
 		f.SetString(value)
 	case []string:

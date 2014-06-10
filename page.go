@@ -283,6 +283,10 @@ func (pages PageSlice) Len() int {
 func (pages PageSlice) Less(i, j int) bool {
 	left := pages.Get(i)
 	right := pages.Get(j)
+
+	if left.PageOrder != -1000 && right.PageOrder != -1000 {
+		return left.PageOrder < right.PageOrder
+	}
 	if left.Date.Unix() == right.Date.Unix() {
 		return left.ModTime.Unix() < right.ModTime.Unix()
 	}
