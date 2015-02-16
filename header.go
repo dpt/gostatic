@@ -13,11 +13,12 @@ import (
 
 type PageHeader struct {
 	Title     string
-	Section   []string
 	Tags      []string
 	Date      time.Time
-	PageOrder int `default:"-1000"`
+	Hide      bool
 	Other     map[string]string
+	Section   []string
+	PageOrder int `default:"-1000"`
 }
 
 var DATEFORMATS = []string{
@@ -52,6 +53,13 @@ func (cfg *PageHeader) ParseLine(line string, s *reflect.Value) {
 	cfg.SetValue(key, bits[1], s)
 }
 
+var FalsyValues = map[string]bool{
+	"false": true,
+	"False": true,
+	"FALSE": true,
+	"f":     true,
+}
+
 func (cfg *PageHeader) SetValue(key string, value string, s *reflect.Value) {
 	// put unknown fields into a map
 	if _, ok := s.Type().FieldByName(key); !ok {
@@ -70,6 +78,9 @@ func (cfg *PageHeader) SetValue(key string, value string, s *reflect.Value) {
 		f.Set(reflect.ValueOf(i))
 	case string:
 		f.SetString(value)
+	case bool:
+		_, ok := FalsyValues[value]
+		f.SetBool(!ok)
 	case []string:
 		values := strings.Split(value, ",")
 		for i, v := range values {

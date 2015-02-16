@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-var Version = "1.11"
+var Version = "1.17"
 
 var opts struct {
 	ShowProcessors bool    `long:"processors" description:"show page processors"`
@@ -119,13 +119,14 @@ func main() {
 }
 
 func StartWatcher(config *SiteConfig) {
-	filemod, err := Watcher(config)
+	filemods, err := Watcher(config)
 	errhandle(err)
 
 	go func() {
 		for {
-			fn := <-filemod
+			fn := <-filemods
 			if !strings.HasPrefix(filepath.Base(fn), ".") {
+				drainchannel(filemods)
 				site := NewSite(config)
 				site.Render()
 			}

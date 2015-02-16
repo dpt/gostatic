@@ -13,26 +13,26 @@ Features include:
  - Simple [config syntax](#configuration)
  - HTTP server and watcher (instant rendering on changes)
 
-Binary builds:
+## Installation
 
-| Linux         | OS X          | Windows       |
-|:--------------|:--------------|:--------------|
-| [64 bit][l64] | [64 bit][x64] | [64 bit][w64] |
-| [32 bit][l32] | [32 bit][x32] | [32 bit][w32] |
+If you're Go user and want to install this from source, you know what to do (`go
+get` it).
 
-[l64]: http://solovyov.net/files/gostatic-64-linux
-[l32]: http://solovyov.net/files/gostatic-32-linux
-[x64]: http://solovyov.net/files/gostatic-64-osx
-[x32]: http://solovyov.net/files/gostatic-32-osx
-[w64]: http://solovyov.net/files/gostatic-64-win.exe
-[w32]: http://solovyov.net/files/gostatic-32-win.exe
+In other case, download a binary from
+[releases page](https://github.com/piranha/gostatic/releases) - which also
+serves as **CHANGELOG**.
 
-If you want to download specific version, url pattern is
-`http://solovyov.net/files/gostatic-<version>-<32/64>-<win.exe/linux/osx>`.
+If you need to automate downloading latest release, I use this script (change
+`64-linux` to the type you need):
+
+```
+URL=$(curl -s https://api.github.com/repos/piranha/gostatic/releases | awk '/download_url.*64-linux/ { print $2; exit }')
+curl -s $(URL) -o gostatic
+```
 
 ## Quick Start
 
-Run `gostatic -i my-site` to generate basic site in directory `name`. It will
+Run `gostatic -i my-site` to generate basic site in directory `my-site`. It will
 have a basic `config` file, which you should edit to put relevant variables at
 the top - it also contains description of how files in your `src` directory are
 treated.
@@ -43,7 +43,7 @@ create new blog posts or new pages. All files, which are not mentioned in
 `config`, are just copied over. Run `gostatic -fv config` to see how your `src`
 is processed.
 
-`site.html` is a file that defines templates your are able to use for your
+`site.tmpl` is a file that defines templates your are able to use for your
 pages. You can see those templates mentioned in `config`.
 
 And, finally, there is a `Makefile`, just for convenience. Run `make` to build
@@ -113,7 +113,7 @@ Config syntax is Makefile-inspired with some simplifications, look at the
 example:
 
 ```Makefile
-TEMPLATES = site.tmpl
+TEMPLATES = site.tmpl templates-folder
 SOURCE = src
 OUTPUT = site
 
@@ -145,11 +145,11 @@ Here we have constants declaration (first three lines), a comment and then three
 rules. One for any markdown file, one specifically for index.md and one for
 generated tags.
 
-Note: Specific rules override matching rules, but there is no very smart logic
-in place and matches comparisons are not strictly defined, so if you have
-several matches you could end up with any of them. Though there is order: exact
-path match, exact name match, glob path match, glob name match. NOTE: this may
-change in future.
+Note: Specific rules override generic matching rules, but logic is not exactly
+very smart, and there is no real precedence defined, so if you have several
+matches for a single file you could end up with any of them. Note that there is
+some order: exact path match, exact name match, glob path match, glob name
+match. NOTE: this may change in future.
 
 Rules consist of path/match, list of dependencies (also paths and matches, the
 ones listed after colon) and commands.
@@ -163,12 +163,18 @@ heavy images etc shouldn't be a problem.
 
 ### Constants
 
-There are three configuration constants. `SOURCE` and `OUTPUT` speak for
-themselves, and `TEMPLATES` is a list of files which will be parsed as Go
-templates. Each file can contain few templates.
+There are three configuration constants:
+
+- `SOURCE` - sources to read (relative to location of config)
+- `OUTPUT` - directory for output (relative to location of config)
+- `TEMPLATES` - list of files and/or directories (containing `*.tmpl` files),
+which will be parsed as Go templates. Each file can contain more than one
+template (see [docs](http://golang.org/pkg/text/template/#hdr-Nested_template_definitions)
+on that).
 
 You can also use arbitrary names for constants to
-[access later](#site-interface) from templates.
+[access later](#site-interface) from templates - just use any other name
+(`AUTHOR` could be one).
 
 ## Page config
 
@@ -187,6 +193,8 @@ Parsed properties:
 - `tags` - list of tags, separated by `,`.
 - `date` - page date, could be used for blog. Accepts formats from bigger to
   smaller (from `"2006-01-02 15:04:05 -07"` to `"2006-01-02"`)
+- `hide` - false if not specified or is one of `f`, `false`, `False`,
+  `FALSE`. True in other cases. Hides page from children and tag lists when true.
 
 You can also define any other property you like, it's value will be treated as a
 string and it's key is capitalized and put on the `.Other`
@@ -236,9 +244,9 @@ Templating is provided using
 [Go templates](http://golang.org/pkg/text/template/). See link for documentation
 on syntax.
 
-Each template is executed in context of a page. This means it has certain
-properties and methods it can output or call to generate content, i.e. `{{
-.Content }}` will output page content in place.
+Each template is executed in context of a [page](#page-interface). This means it
+has certain properties and methods it can output or call to generate content,
+i.e. `{{ .Content }}` will output page content in place.
 
 ### Global functions
 
@@ -247,8 +255,8 @@ Go template system provides some convenient
 expands on that a bit:
 
  - `changed <name> <value>` - checks if value has changed since previous call
-   with the same name. Storage, used for checking, is global over whole run of
-   gostatic, so choose unique names.
+   with the same name. Storage used for checking is global over the whole run of
+   gostatic, so choose unique names for different places.
 
  - `cut <value> <begin> <end>` - cut partial content from `<value>`, delimited
    by regular expressions `<begin>` and `<end>`.
@@ -263,6 +271,9 @@ expands on that a bit:
    longer. In other case, returns original string.
 
  - `strip_html <value>` - remove all HTML tags from string.
+
+ - `split <value> <separator>` - split string by separator, generating an array
+   (you can use `range` with result of this function).
 
 ### Page interface
 
@@ -289,8 +300,10 @@ expands on that a bit:
 - `.Title` - page title.
 - `.Tags` - list of page tags.
 - `.Date` - page date, as defined in [page config](#page-config).
+- `.Hide` - boolean if page is going to be absent from `{{ .Children }}` or `{{
+  .WithTag }}` lists.
 - `.Other` - map of all other properties (capitalized) from
-  [page config](#page-config).
+  [page config](#page-config), like `{{ .Other.Author }}`.
 
 ----
 
