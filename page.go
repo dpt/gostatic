@@ -339,9 +339,9 @@ func (pages PageSlice) Children(root string) *PageSlice {
 	children := make(PageSlice, 0)
 
 	for _, page := range pages {
-		if (!page.Hide &&
+		if !page.Hide &&
 			strings.HasPrefix(page.Url(), root) &&
-			page.Url() != root) {
+			page.Url() != root {
 			children = append(children, page)
 		}
 	}
@@ -366,9 +366,9 @@ func (pages PageSlice) WithTag(tag string) *PageSlice {
 	tagged := make(PageSlice, 0)
 
 	for _, page := range pages {
-		if (!page.Hide &&
+		if !page.Hide &&
 			page.Tags != nil &&
-			SliceStringIndexOf(page.Tags, tag) != -1) {
+			SliceStringIndexOf(page.Tags, tag) != -1 {
 			tagged = append(tagged, page)
 		}
 	}
