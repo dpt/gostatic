@@ -173,9 +173,9 @@ func (page *Page) Changed() bool {
 		page.state = StateUnchanged
 		dest, err := os.Stat(page.OutputPath())
 
-		if (err != nil ||
+		if err != nil ||
 			dest.ModTime().Before(page.ModTime) ||
-			dest.ModTime().Before(page.Site.ChangedAt)) {
+			dest.ModTime().Before(page.Site.ChangedAt) {
 			page.state = StateChanged
 		} else {
 			for _, dep := range page.Deps {
@@ -262,8 +262,6 @@ func (page *Page) SectionName(joiner string) string {
 	}
 	return section
 }
-
-
 
 func (page *Page) SectionAtDepth(level int) string {
 	if level >= len(page.Section) {
