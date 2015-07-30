@@ -6,9 +6,11 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 )
 
 type Command string
@@ -29,6 +31,7 @@ type SiteConfig struct {
 	Output    string
 	Rules     RuleMap
 	Other     map[string]string
+	changedAt time.Time
 }
 
 func NewSiteConfig(path string) (*SiteConfig, error) {
@@ -37,11 +40,17 @@ func NewSiteConfig(path string) (*SiteConfig, error) {
 		return nil, err
 	}
 
+	stat, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
 	basepath, _ := filepath.Split(path)
 	cfg := &SiteConfig{
-		Rules: make(RuleMap),
-		Other: make(map[string]string),
-		Base:  basepath,
+		Rules:     make(RuleMap),
+		Other:     make(map[string]string),
+		Base:      basepath,
+		changedAt: stat.ModTime(),
 	}
 
 	indent := 0
@@ -156,33 +165,6 @@ func (rule *Rule) ParseCommand(line string) {
 
 func (cmd Command) Matches(prefix Command) bool {
 	return cmd == prefix || strings.HasPrefix(string(cmd), string(prefix)+" ")
-}
-
-func (cmd Command) MatchesAny(prefixes CommandList) bool {
-	for _, prefix := range prefixes {
-		if cmd.Matches(prefix) {
-			return true
-		}
-	}
-	return false
-}
-
-func (commands CommandList) MatchedIndex(prefix Command) int {
-	for i, cmd := range commands {
-		if cmd.Matches(prefix) {
-			return i
-		}
-	}
-	return -1
-}
-
-func (rule Rule) MatchedCommand(prefix Command) *Command {
-	i := rule.Commands.MatchedIndex(prefix)
-	if i == -1 {
-		return nil
-	}
-
-	return &rule.Commands[i]
 }
 
 func (rule *Rule) IsDep(page *Page) bool {

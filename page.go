@@ -8,6 +8,7 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -36,6 +37,7 @@ type Page struct {
 
 	processed bool
 	state     int
+	raw       string
 	content   string
 	wasread   bool // if content was read already
 }
@@ -68,12 +70,19 @@ func NewPage(site *Site, path string) *Page {
 	return page
 }
 
-func (page *Page) Content() string {
+func (page *Page) Raw() string {
 	if !page.wasread {
-		content, err := ioutil.ReadFile(page.FullPath())
+		data, err := ioutil.ReadFile(page.FullPath())
 		errhandle(err)
-		page.SetContent(string(content))
+		page.raw = string(data)
 		page.wasread = true
+	}
+	return page.raw
+}
+
+func (page *Page) Content() string {
+	if page.content == "" {
+		return page.Raw()
 	}
 	return page.content
 }
@@ -110,6 +119,9 @@ func (page *Page) UrlTo(other *Page) string {
 
 func (page *Page) Rel(path string) string {
 	root := strings.Repeat("../", strings.Count(page.Url(), "/"))
+	if root == "" {
+		root = "./"
+	}
 	if path[0] == '/' {
 		return root + path[1:]
 	}
@@ -128,11 +140,13 @@ func (page *Page) peek() {
 		return
 	}
 
-	for _, name := range PreProcessors {
-		cmd := page.Rule.MatchedCommand(name)
-		if cmd != nil {
-			ProcessCommand(page, cmd)
-		}
+	for _, cmd := range page.Rule.Commands {
+		ProcessCommand(page, &cmd, true)
+	}
+
+	// Raw is something we have after all preprocessors have finished
+	if page.content != "" {
+		page.raw = page.content
 	}
 }
 
@@ -159,7 +173,9 @@ func (page *Page) Changed() bool {
 		page.state = StateUnchanged
 		dest, err := os.Stat(page.OutputPath())
 
-		if err != nil || dest.ModTime().Before(page.ModTime) {
+		if (err != nil ||
+			dest.ModTime().Before(page.ModTime) ||
+			dest.ModTime().Before(page.Site.ChangedAt)) {
 			page.state = StateChanged
 		} else {
 			for _, dep := range page.Deps {
@@ -181,9 +197,7 @@ func (page *Page) Process() *Page {
 	page.processed = true
 	if page.Rule.Commands != nil {
 		for _, cmd := range page.Rule.Commands {
-			if !cmd.MatchesAny(PreProcessors) {
-				ProcessCommand(page, &cmd)
-			}
+			ProcessCommand(page, &cmd, false)
 		}
 	}
 
@@ -392,6 +406,18 @@ func (pages PageSlice) BySource(s string) *Page {
 		}
 	}
 	return nil
+}
+
+func (pages PageSlice) GlobSource(pattern string) *PageSlice {
+	found := make(PageSlice, 0)
+
+	for _, page := range pages {
+		if matched, _ := path.Match(pattern, page.Source); matched {
+			found = append(found, page)
+		}
+	}
+
+	return &found
 }
 
 func (pages PageSlice) ByPath(s string) *Page {

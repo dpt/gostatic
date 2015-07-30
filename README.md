@@ -11,7 +11,11 @@ Features include:
  - Markdown support
  - Flexible [filter system](#processors)
  - Simple [config syntax](#configuration)
+ - Support for pagination
+ - Plays well with external scripts
  - HTTP server and watcher (instant rendering on changes)
+
+And all in all, it works nicely for me, so it may work for you!
 
 ## Installation
 
@@ -224,9 +228,10 @@ You can always check list of available processors with `gostatic --processors`.
 
 - `template <name>` - pass page to a template named `<name>`.
 
-- `tags <path-pattern>` - create (if not yet) virtual page for all tags of a
-  current page. This tag page has path formed by replacing `*` in
-  `<path-pattern>` with a tag name.
+- `tags <path-pattern>` - create a virtual page for all tags of a current
+  page. This tag page has path formed by replacing `*` in `<path-pattern>` with
+  a tag name and has a tag as its `.Title` (use `{{ range .Site.Pages.WithTag
+  .Title }}...{{end}}` to get a list of tagged pages.
 
 - `relativize` - change all urls archored at `/` to be relative (i.e. add
   appropriate amount of `../`) so that generated content can be deployed in a
@@ -235,6 +240,16 @@ You can always check list of available processors with `gostatic --processors`.
 - `external <command> <args...>` - call external command with content of a page
   as stdin and using stdout as a new content of a page. Has a shortcut:
   `:<command> <args...>` (`:` is replaced with `external `).
+
+- `paginate <n> <path-pattern>` - create a virtual page for each `n` of pages
+  (grouped by `path-pattern`, so you can paginate few groups of pages as a
+  single one). `path-pattern` has `*` replaced by an index of this virtual page
+  (1-based), and you can get a list of pages with `{{ range paginator
+  .}}...{{end}}` (see [paginator](#global-functions) function). Using `paginate`
+  with the same `path-pattern` on different types of pages will group them in
+  same paginated list (*request*: please open an
+  [issue](https://github.com/piranha/gostatic/issues/new) if you have an idea
+  how to phrase this better).
 
 ## Templating
 
@@ -252,26 +267,40 @@ Go template system provides some convenient
 [functions](http://golang.org/pkg/text/template/#hdr-Functions), and gostatic
 expands on that a bit:
 
- - `changed <name> <value>` - checks if value has changed since previous call
-   with the same name. Storage used for checking is global over the whole run of
-   gostatic, so choose unique names for different places.
+- `changed <name> <value>` - checks if value has changed since previous call
+  with the same name. Storage used for checking is global over the whole run of
+  gostatic, so choose unique names for different places.
 
- - `cut <value> <begin> <end>` - cut partial content from `<value>`, delimited
-   by regular expressions `<begin>` and `<end>`.
+- `cut <begin> <end> <value>` - cut partial content from `<value>`, delimited
+  by regular expressions `<begin>` and `<end>`.
 
- - `hash <value>` - return 32-bit hash of a given value.
+- `hash <value>` - return 32-bit hash of a given value.
 
- - `version <path>` - return relative url to a page with resulting path `<path>`
-   with `?v=<32-bit hash>` appended (used to override cache settings on static
-   files).
+- `version <page> <path>` - return relative url to a page with resulting path
+  `<path>` with `?v=<32-bit hash>` appended (use to override cache settings for
+  static files).
 
- - `truncate <length> <value>` - truncate string to given length if it's
-   longer. In other case, returns original string.
+- `truncate <length> <value>` - truncate string to given length (if it's
+  longer).
 
- - `strip_html <value>` - remove all HTML tags from string.
+- `strip_html <value>` - remove all HTML tags from string.
 
- - `split <value> <separator>` - split string by separator, generating an array
-   (you can use `range` with result of this function).
+- `strip_newlines <value>` - remove all line breaks and newlines from string.
+
+- `replace <old> <new> <value>` - replace all occurences of `old` with `new`.
+
+- `replacen <old> <new> <n> <value>` - same as above, but only `n` times.
+
+- `split <separator> <value>` - split string by separator, generating an array
+  (you can use `range` with result of this function).
+
+- `contains <needle> <value>` - check if a string (`value`) contains another one
+  (`needle`).
+
+- `markdown <value>` - convert a string (`value`) from Markdown to HTML.
+
+- `paginator <page>` - get a [paginator](#paginator-interface) object for
+  current page (only works on pages created by `paginate` processor).
 
 ### Page interface
 
@@ -305,6 +334,8 @@ expands on that a bit:
 
 ----
 
+- `.Raw` - page content after preprocessors (i.e. after `config` has stripped it
+  part), that was originally read from the disk.
 - `.Content` - page content.
 - `.Url` - page url (i.e. `.Path`, but with `index.html` stripped from the end).
 - `.UrlTo <other-page>` - relative url from current to some other page.
@@ -313,6 +344,16 @@ expands on that a bit:
   active elements in menu, for example.
 - `.UrlMatches <pattern>` - checks if page url matches regular expression
   `<pattern>`.
+
+### Paginator interface
+
+- `.Number` - number of paginator page, first is 1
+- `.PathPattern` - whatever was passed as `path-pattern` to `paginate`
+  (processor)[#processors]
+- `.Page` - paginator's own [page](#page-interface)
+- `.Pages` - [list of pages](#page-list-interface)
+- `.Prev` - previous paginator object (if current is first, then `nil`)
+- `.Next` - next paginator object (if current is last, then `nil`)
 
 ### Page list interface
 
@@ -324,6 +365,7 @@ expands on that a bit:
   earlier pages exist or page is not in page list.
 - `.Next <page>` - return page with later date than given. Returns nil if no
   later pages exist or page is not in page list.
+- `.Slice <from> <to>` - return pages from `from` to `to` (i.e. from 0 to 10).
 
 ----
 
@@ -334,6 +376,7 @@ expands on that a bit:
 
 - `.BySource <path>` - finds a page with source path `<path>`.
 - `.ByPath <path>` - finds a page with resulting path `<path>`.
+- `.GlobSource <pattern>` - list of pages, [matching](http://golang.org/pkg/path/#Match) source path `<pattern>`.
 
 ### Site interface
 

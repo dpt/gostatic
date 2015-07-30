@@ -23,7 +23,7 @@ func HasChanged(name string, value interface{}) bool {
 	return changed
 }
 
-func Cut(value, begin, end string) (string, error) {
+func Cut(begin, end, value string) (string, error) {
 	bre, err := regexp.Compile(begin)
 	if err != nil {
 		return "", err
@@ -75,12 +75,43 @@ func StripHTML(value string) string {
 	return regexp.MustCompile("<[^>]+>").ReplaceAllString(value, "")
 }
 
+func StripNewlines(value string) string {
+	return regexp.MustCompile("[\r\n]").ReplaceAllString(value, "")
+}
+
+func Replace(old, new, value string) string {
+	return strings.Replace(value, old, new, -1)
+}
+
+func ReplaceN(old, new string, n int, value string) string {
+	return strings.Replace(value, old, new, n)
+}
+
+func Split(sep, value string) []string {
+	return strings.Split(value, sep)
+}
+
+func Contains(needle, value string) bool {
+	return strings.Contains(value, needle)
+}
+
+func CurrentPaginator(current *Page) *Paginator {
+	// from processors.go
+	return Paginators[current.Source]
+}
+
 var TemplateFuncMap = template.FuncMap{
-	"changed":    HasChanged,
-	"cut":        Cut,
-	"hash":       Hash,
-	"version":    Versionize,
-	"truncate":   Truncate,
-	"strip_html": StripHTML,
-	"split":      strings.Split,
+	"changed":        HasChanged,
+	"cut":            Cut,
+	"hash":           Hash,
+	"version":        Versionize,
+	"truncate":       Truncate,
+	"strip_html":     StripHTML,
+	"strip_newlines": StripNewlines,
+	"replace":        Replace,
+	"replacen":       ReplaceN,
+	"split":          Split,
+	"contains":       Contains,
+	"markdown":       Markdown,
+	"paginator":      CurrentPaginator,
 }
