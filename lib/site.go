@@ -1,12 +1,14 @@
 // (c) 2012 Alexander Solovyov
 // under terms of ISC license
 
-package main
+package gostatic
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"text/template"
 	"time"
 )
@@ -16,9 +18,15 @@ type Site struct {
 	Template  *template.Template
 	ChangedAt time.Time
 	Pages     PageSlice
+
+	ForceRefresh bool
+
+	mx sync.Mutex
+
+	Processors map[string]Processor
 }
 
-func NewSite(config *SiteConfig) *Site {
+func NewSite(config *SiteConfig, procs ProcessorMap) *Site {
 	template := template.New("no-idea-what-to-pass-here").Funcs(TemplateFuncMap)
 	template, err := template.ParseFiles(config.Templates...)
 	errhandle(err)
@@ -36,6 +44,7 @@ func NewSite(config *SiteConfig) *Site {
 		Template:   template,
 		ChangedAt:  changed,
 		Pages:      make(PageSlice, 0),
+		Processors: procs,
 	}
 
 	site.Collect()
@@ -49,6 +58,27 @@ func (site *Site) AddPage(path string) {
 	if page.state != StateIgnored {
 		site.Pages = append(site.Pages, page)
 	}
+}
+
+//todo make this function to method of Site
+func Watch(s *Site) {
+	cnf := s.SiteConfig
+	processors := s.Processors
+	filemods, err := Watcher(&cnf)
+	errhandle(err)
+
+	go func() {
+		for {
+			fn := <-filemods
+			if !strings.HasPrefix(filepath.Base(fn), ".") {
+				drainchannel(filemods)
+				//TODO change it to site.Rerender()
+				site := NewSite(&cnf, processors)
+				site.Render()
+			}
+		}
+	}()
+
 }
 
 func (site *Site) Collect() {
@@ -86,26 +116,35 @@ func (site *Site) FindDeps() {
 	}
 }
 
-func (site *Site) Process() int {
+func (site *Site) Process() (int, error) {
 	processed := 0
 	for _, page := range site.Pages {
 		if page.Changed() {
 			debug("Processing page %s\n", page.Source)
-			page.Process()
+			_, err := page.Process()
+			if err != nil {
+				return processed, err
+			}
 			processed++
 		}
 	}
-	return processed
+	return processed, nil
 }
 
-func (site *Site) ProcessAll() {
+func (site *Site) ProcessAll() error {
 	for _, page := range site.Pages {
-		page.Process()
+		_, err := page.Process()
+		if err != nil {
+			return err
+		}
 	}
+	return nil
 }
 
 func (site *Site) Summary() {
-	site.ProcessAll()
+	err := site.ProcessAll()
+	errhandle(err)
+
 	out("Total pages to render: %d\n", len(site.Pages))
 
 	for _, page := range site.Pages {
@@ -124,7 +163,8 @@ func (site *Site) Summary() {
 }
 
 func (site *Site) Render() {
-	processed := site.Process()
+	processed, err := site.Process()
+	errhandle(err)
 	out("Rendering %d changed pages of %d total\n", processed, len(site.Pages))
 
 	for _, page := range site.Pages {
@@ -138,8 +178,19 @@ func (site *Site) Render() {
 		errhandle(err)
 
 		_, err = page.Render()
-		errhandle(err)
+		if err != nil {
+			errhandle(fmt.Errorf("Unable to render page '%s': %v", page.Source, err))
+		}
 	}
+}
+
+func (site *Site) Lookup(path string) *Page {
+	for i := range site.Pages {
+		if site.Pages[i].FullPath() == path {
+			return site.Pages[i]
+		}
+	}
+	return nil
 }
 
 func (site *Site) PageBySomePath(s string) *Page {

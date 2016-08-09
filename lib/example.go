@@ -3,7 +3,7 @@
 
 // Generating example site
 
-package main
+package gostatic
 
 import (
 	"io/ioutil"
@@ -141,7 +141,7 @@ var ExampleFeed = `
   {{ range .Tags }}
   <category term="{{ . }}"></category>
   {{ end }}
-  <link href="{{ .Site.Other.Url }}{{ .Url }}" rel="alternate"></link>
+  <link href="{{ .Site.Other.Url }}/{{ .Url }}" rel="alternate"></link>
   <content type="html">
     {{/* .Process runs here in case only feed changed */}}
     {{ with cut "<section>" "</section>" .Process.Content }}

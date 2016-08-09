@@ -12,3 +12,13 @@ stuff: one, two, three
 {{ range split .Other.Stuff "," }}
   - {{ . }}
 {{ end }}
+
+{{ exec "echo" "hello" }}
+
+# Hello
+
+* hi
+```
+# hi
+```
+* ho

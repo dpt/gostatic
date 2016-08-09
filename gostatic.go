@@ -6,21 +6,33 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	flags "github.com/jessevdk/go-flags"
 	"net/http"
 	"os"
 	"path/filepath"
-	"strings"
+
+	flags "github.com/jessevdk/go-flags"
+	gostatic "github.com/piranha/gostatic/lib"
+	"github.com/piranha/gostatic/processors"
 )
 
-var Version = "2.0"
+const (
+	// ExitCodeOk is used when the application exits without error.
+	ExitCodeOk = 0
+	// ExitCodeInvalidFlags is used when invalid flags are passed.
+	ExitCodeInvalidFlags = 1
+	// ExitCodeInvalidConfig is used when an invalid configuration file is given.
+	ExitCodeInvalidConfig = 2
+	// ExitCodeOther is used in all other situations.
+	ExitCodeOther = 127
+)
 
-var opts struct {
+// Opts contains the flags which have been parsed by go-flags.
+type Opts struct {
 	ShowProcessors bool    `long:"processors" description:"show page processors"`
 	ShowConfig     bool    `long:"show-config" description:"print config as JSON"`
 	ShowSummary    bool    `long:"summary" description:"print all pages on stdout"`
 	InitExample    *string `short:"i" long:"init" description:"create example site"`
-	DumpPage       string  `short:"d" long:"dump" description:"print page metadata as JSON"`
+	DumpPage       string  `short:"d" long:"dump" description:"print page metadata as JSON (pass path to source or target file)"`
 
 	// checked in Page.Changed()
 	Force bool `short:"f" long:"force" description:"force building all pages"`
@@ -32,28 +44,35 @@ var opts struct {
 	Version bool `short:"V" long:"version" description:"show version and exit"`
 }
 
+var opts Opts
+
 func main() {
 	argparser := flags.NewParser(&opts,
 		flags.PrintErrors|flags.PassDoubleDash|flags.HelpFlag)
 	argparser.Usage = "[OPTIONS] path/to/config\n\nBuild a site."
 
 	args, err := argparser.Parse()
+
 	if err != nil {
-		return
+		if _, ok := err.(*flags.Error); ok {
+			return
+		}
+
+		errhandle(fmt.Errorf("unknown error: %v", err))
+		os.Exit(ExitCodeOther)
 	}
 
 	if opts.ShowSummary && opts.Watch {
 		errhandle(fmt.Errorf("--summary and --watch do not mix together well"))
+		os.Exit(ExitCodeOther)
+	}
+
+	if opts.Verbose {
+		gostatic.DEBUG = true
 	}
 
 	if opts.Version {
-		out("gostatic %s\n", Version)
-		return
-	}
-
-	if opts.ShowProcessors {
-		InitProcessors()
-		ProcessorSummary()
+		out("gostatic %s\n", gostatic.VERSION)
 		return
 	}
 
@@ -62,27 +81,39 @@ func main() {
 		if len(*opts.InitExample) > 0 {
 			target = filepath.Join(target, *opts.InitExample)
 		}
-		WriteExample(target)
+		gostatic.WriteExample(target)
+		return
+	}
+
+	if opts.ShowProcessors {
+		processors.DefaultProcessors.ProcessorSummary()
 		return
 	}
 
 	if len(args) == 0 {
-		argparser.WriteHelp(os.Stdout)
+		argparser.WriteHelp(os.Stderr)
+		os.Exit(ExitCodeInvalidFlags)
 		return
 	}
 
-	InitProcessors()
-	config, err := NewSiteConfig(args[0])
-	errhandle(err)
+	config, err := gostatic.NewSiteConfig(args[0])
+	if err != nil {
+		errhandle(fmt.Errorf("invalid config file '%s': %v", args[0], err))
+		os.Exit(ExitCodeInvalidConfig)
+	}
+
+	site := gostatic.NewSite(config, processors.DefaultProcessors)
+
+	if opts.Force {
+		site.ForceRefresh = true
+	}
 
 	if opts.ShowConfig {
 		x, err := json.MarshalIndent(config, "", "  ")
 		errhandle(err)
-		println(string(x))
+		fmt.Fprintln(os.Stderr, string(x))
 		return
 	}
-
-	site := NewSite(config)
 
 	if len(opts.DumpPage) > 0 {
 		page := site.PageBySomePath(opts.DumpPage)
@@ -104,7 +135,8 @@ func main() {
 	}
 
 	if opts.Watch {
-		StartWatcher(config)
+		go gostatic.Watch(site)
+		//StartWatcher(config, procs)
 		out("Starting server at *:%s...\n", opts.Port)
 
 		fs := http.FileServer(http.Dir(config.Output))
@@ -116,20 +148,4 @@ func main() {
 		err := http.ListenAndServe(":"+opts.Port, nil)
 		errhandle(err)
 	}
-}
-
-func StartWatcher(config *SiteConfig) {
-	filemods, err := Watcher(config)
-	errhandle(err)
-
-	go func() {
-		for {
-			fn := <-filemods
-			if !strings.HasPrefix(filepath.Base(fn), ".") {
-				drainchannel(filemods)
-				site := NewSite(config)
-				site.Render()
-			}
-		}
-	}()
 }

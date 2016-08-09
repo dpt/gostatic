@@ -1,7 +1,7 @@
 // (c) 2012 Alexander Solovyov
 // under terms of ISC license
 
-package main
+package gostatic
 
 import (
 	"fmt"
@@ -64,7 +64,7 @@ func NewPage(site *Site, path string) *Page {
 		Path:    relpath,
 		ModTime: stat.ModTime(),
 	}
-	page.peek()
+	page.Peek()
 	debug("Found page: %s; rule: %v\n",
 		page.Source, page.Rule)
 	return page
@@ -91,6 +91,10 @@ func (page *Page) SetContent(content string) {
 	page.content = content
 }
 
+func (page *Page) SetState(state int) {
+	page.state = state
+}
+
 func (page *Page) FullPath() string {
 	return filepath.Join(page.Site.Source, page.Source)
 }
@@ -113,6 +117,10 @@ func (page *Page) Url() string {
 	return url
 }
 
+func (page *Page) Name() string {
+	return filepath.Base(page.Url())
+}
+
 func (page *Page) UrlTo(other *Page) string {
 	return page.Rel(other.Url())
 }
@@ -132,22 +140,35 @@ func (page *Page) Is(path string) bool {
 	return page.Url() == path || page.Path == path
 }
 
+// will be used for dynamically created pages
+func (page *Page) SetWasRead(wasread bool) {
+	page.wasread = wasread
+}
+
+func (page *Page) WasRead() bool {
+	return page.wasread
+}
+
 // Peek is used to run those processors which should be done before others can
 // find out about us. Two actual examples include 'config' and 'rename'
 // processors right now.
-func (page *Page) peek() {
+func (page *Page) Peek() error {
 	if page.Rule == nil {
-		return
+		return nil
 	}
 
 	for _, cmd := range page.Rule.Commands {
-		ProcessCommand(page, &cmd, true)
+		err := page.Site.ProcessCommand(page, &cmd, true)
+		if err != nil {
+			return err
+		}
 	}
 
 	// Raw is something we have after all preprocessors have finished
 	if page.content != "" {
 		page.raw = page.content
 	}
+	return nil
 }
 
 func (page *Page) findDeps() {
@@ -165,7 +186,7 @@ func (page *Page) findDeps() {
 }
 
 func (page *Page) Changed() bool {
-	if opts.Force {
+	if page.Site.ForceRefresh {
 		return true
 	}
 
@@ -189,19 +210,22 @@ func (page *Page) Changed() bool {
 	return page.state == StateChanged
 }
 
-func (page *Page) Process() *Page {
+func (page *Page) Process() (*Page, error) {
 	if page.processed || page.Rule == nil {
-		return page
+		return page, nil
 	}
 
 	page.processed = true
 	if page.Rule.Commands != nil {
 		for _, cmd := range page.Rule.Commands {
-			ProcessCommand(page, &cmd, false)
+			err := page.Site.ProcessCommand(page, &cmd, false)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
-	return page
+	return page, nil
 }
 
 func (page *Page) WriteTo(writer io.Writer) (n int64, err error) {
@@ -335,7 +359,7 @@ func (pages PageSlice) Less(i, j int) bool {
 		return left.PageOrder < right.PageOrder
 	}
 	if left.Date.Unix() == right.Date.Unix() {
-		return left.ModTime.Unix() < right.ModTime.Unix()
+		return left.Path < right.Path
 	}
 	return left.Date.Unix() > right.Date.Unix()
 }
@@ -345,6 +369,10 @@ func (pages PageSlice) Swap(i, j int) {
 
 func (pages PageSlice) Sort() {
 	sort.Sort(pages)
+}
+
+func (pages PageSlice) Reverse() {
+	sort.Sort(sort.Reverse(pages))
 }
 
 func (pages PageSlice) Children(root string) *PageSlice {

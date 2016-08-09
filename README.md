@@ -1,6 +1,6 @@
 # gostatic
 
-Gostatic is a static site generator. What differs it from most of other tools is
+Gostatic is a static site generator. What distinguishes it from most of other tools is
 that it's written in Go and tracks changes, which means it should work
 reasonably [fast](#speed).
 
@@ -14,6 +14,7 @@ Features include:
  - Support for pagination
  - Plays well with external scripts
  - HTTP server and watcher (instant rendering on changes)
+ - Suitable for automation (ability to query state with `gostatic --dump`)
 
 And all in all, it works nicely for me, so it may work for you!
 
@@ -67,14 +68,17 @@ documentation (even if it's just this `README.md`) are always very welcome!
 - [External Resources](#external-resources)
 - [Configuration](#configuration)
   - [Constants](#constants)
-- [Page config](#page-config)
+- [Page Config](#page-config)
 - [Processors](#processors)
-- [Templating](#templating)
+- [Template API Reference](#template-api-reference)
   - [Global Functions](#global-functions)
   - [Page interface](#page-interface)
   - [Page list interface](#page-list-interface)
   - [Site interface](#site-interface)
+- [Extensibility](#extensibility)
 
+Also, see [wiki](https://github.com/piranha/gostatic/wiki) - and feel free to
+add more information there!
 
 ## Approach
 
@@ -178,7 +182,10 @@ You can also use arbitrary names for constants to
 [access later](#site-interface) from templates - just use any other name
 (`AUTHOR` could be one).
 
-## Page config
+All constants can also be accessed from the config itself, using
+`$(CONSTANT_NAME)` syntax, just like in `Makefile`.
+
+## Page Config
 
 Page config is only processed if you specify `config` processor for a page. It's
 format is `name: value`, for example:
@@ -251,7 +258,7 @@ You can always check list of available processors with `gostatic --processors`.
   [issue](https://github.com/piranha/gostatic/issues/new) if you have an idea
   how to phrase this better).
 
-## Templating
+## Template API Reference
 
 Templating is provided using
 [Go templates](http://golang.org/pkg/text/template/). See link for documentation
@@ -276,7 +283,7 @@ expands on that a bit:
 
 - `hash <value>` - return 32-bit hash of a given value.
 
-- `version <page> <path>` - return relative url to a page with resulting path
+- `version <page> <path>` - return relative URL to a page with resulting path
   `<path>` with `?v=<32-bit hash>` appended (use to override cache settings for
   static files).
 
@@ -287,7 +294,7 @@ expands on that a bit:
 
 - `strip_newlines <value>` - remove all line breaks and newlines from string.
 
-- `replace <old> <new> <value>` - replace all occurences of `old` with `new`.
+- `replace <old> <new> <value>` - replace all occurrences of `old` with `new`.
 
 - `replacen <old> <new> <n> <value>` - same as above, but only `n` times.
 
@@ -301,6 +308,13 @@ expands on that a bit:
 
 - `paginator <page>` - get a [paginator](#paginator-interface) object for
   current page (only works on pages created by `paginate` processor).
+
+- `exec <cmd> [<arg1> <arg2> ....]` - exec a command with (optional) arguments.
+
+- `excerpt <text> <maxWordCount>` - Gets an excerpt from the given text, to a
+  maximum of `maxWordCount` words. When the text is shortened, it will produce
+  an `[...]` string, denoting there's more. For example, `The quick brown fox`
+  with `maxWordCount` of 2 will result in `The quick [...]`.
 
 ### Page interface
 
@@ -338,6 +352,7 @@ expands on that a bit:
   part), that was originally read from the disk.
 - `.Content` - page content.
 - `.Url` - page url (i.e. `.Path`, but with `index.html` stripped from the end).
+- `.Name` - page name (i.e. last part of `.Url`).
 - `.UrlTo <other-page>` - relative url from current to some other page.
 - `.Rel <url>` - relative url to given absolute (anchored at `/`) url.
 - `.Is <url>` - checks if page is at passed url (or path) - use it for marking
@@ -385,3 +400,17 @@ expands on that a bit:
 - `.Output` - path to site destination.
 - `.Templates` - list of template files used for the site.
 - `.Other` - any other properties (capitalized) defined in site config.
+
+## Extensibility
+
+Obviously, the easiest way to extend gostatic's functionality is to use
+`external` [processor](#processors). It makes you able to process files in the
+way you want, but is more or less limited to that. There is no API right now to
+create pages on the fly (like `tags` processor does) using this method, for
+example.
+
+But `gostatic` itself is a
+[library](https://github.com/piranha/gostatic/tree/master/lib), and you can
+write your own static site generator using this library. See
+[gostatic.go](https://github.com/piranha/gostatic/blob/master/gostatic.go) for
+an example of one.
