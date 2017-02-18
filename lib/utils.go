@@ -27,7 +27,7 @@ func errexit(err error) {
 	if err == nil {
 		return
 	}
-	fmt.Printf("Error: %s\n", err)
+	fmt.Printf("Fatal error: %s\n", err)
 	os.Exit(1)
 }
 
@@ -79,7 +79,7 @@ func Markdown(source string) string {
 	// set up the HTML renderer
 	flags := 0
 	flags |= bf.HTML_USE_SMARTYPANTS
-	flags |= bf.HTML_SMARTYPANTS_FRACTIONS
+	//flags |= bf.HTML_SMARTYPANTS_FRACTIONS
 	renderer := bf.HtmlRenderer(flags, "", "")
 
 	// set up the parser

@@ -44,7 +44,7 @@ type Page struct {
 
 type PageSlice []*Page
 
-func NewPage(site *Site, path string) *Page {
+func NewPages(site *Site, path string) PageSlice {
 	stat, err := os.Stat(path)
 	errhandle(err)
 
@@ -54,20 +54,28 @@ func NewPage(site *Site, path string) *Page {
 	// convert windows path separators to unix style
 	relpath = strings.Replace(relpath, "\\", "/", -1)
 
-	pattern, rule := site.Rules.MatchedRule(relpath)
-
-	page := &Page{
-		Site:    site,
-		Rule:    rule,
-		Pattern: pattern,
-		Source:  relpath,
-		Path:    relpath,
-		ModTime: stat.ModTime(),
+	pattern, rules := site.Rules.MatchedRules(relpath)
+	if rules == nil {
+		rules = make([]*Rule, 1)
 	}
-	page.Peek()
-	debug("Found page: %s; rule: %v\n",
-		page.Source, page.Rule)
-	return page
+
+	pages := make(PageSlice, 0)
+
+	for _, rule := range rules {
+		page := &Page{
+			Site:    site,
+			Rule:    rule,
+			Pattern: pattern,
+			Source:  relpath,
+			Path:    relpath,
+			ModTime: stat.ModTime(),
+		}
+		page.Peek()
+		debug("Found page: %s; rule: %v\n",
+			page.Source, page.Rule)
+		pages = append(pages, page)
+	}
+	return pages
 }
 
 func (page *Page) Raw() string {
@@ -76,6 +84,7 @@ func (page *Page) Raw() string {
 		errhandle(err)
 		page.raw = string(data)
 		page.wasread = true
+		debug("Page '%s' was read, is of length %d\n", page.FullPath(), len(page.raw))
 	}
 	return page.raw
 }
@@ -140,7 +149,7 @@ func (page *Page) Is(path string) bool {
 	return page.Url() == path || page.Path == path
 }
 
-// will be used for dynamically created pages
+// Is used for dynamically created pages
 func (page *Page) SetWasRead(wasread bool) {
 	page.wasread = wasread
 }
@@ -151,7 +160,7 @@ func (page *Page) WasRead() bool {
 
 // Peek is used to run those processors which should be done before others can
 // find out about us. Two actual examples include 'config' and 'rename'
-// processors right now.
+// processors.
 func (page *Page) Peek() error {
 	if page.Rule == nil {
 		return nil
@@ -164,7 +173,7 @@ func (page *Page) Peek() error {
 		}
 	}
 
-	// Raw is something we have after all preprocessors have finished
+	// Raw is page content after preprocessors, but before preprocessors
 	if page.content != "" {
 		page.raw = page.content
 	}
@@ -351,6 +360,7 @@ func (pages PageSlice) Slice(from int, to int) PageSlice {
 func (pages PageSlice) Len() int {
 	return len(pages)
 }
+
 func (pages PageSlice) Less(i, j int) bool {
 	left := pages.Get(i)
 	right := pages.Get(j)
@@ -359,10 +369,11 @@ func (pages PageSlice) Less(i, j int) bool {
 		return left.PageOrder < right.PageOrder
 	}
 	if left.Date.Unix() == right.Date.Unix() {
-		return left.Path < right.Path
+		return left.Path > right.Path
 	}
 	return left.Date.Unix() > right.Date.Unix()
 }
+
 func (pages PageSlice) Swap(i, j int) {
 	pages[i], pages[j] = pages[j], pages[i]
 }
