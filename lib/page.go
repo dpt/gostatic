@@ -304,6 +304,33 @@ func (page *Page) Next() *Page {
 	return page.Site.Pages.Next(page)
 }
 
+func (page *Page) FullTitle(joiner string) string {
+	section := ""
+	if len(page.Section) > 0 {
+		section = strings.Join(page.Section, joiner) + joiner
+	}
+	return section + page.Title
+}
+
+func (page *Page) SectionName(joiner string) string {
+	return strings.Join(page.Section, joiner)
+}
+
+func (page *Page) SectionAtDepth(level int) string {
+	if level >= len(page.Section) {
+		return ""
+	}
+	return page.Section[level]
+}
+
+func (page *Page) GetSection() []string {
+	return page.Section
+}
+
+func (page *Page) AsIdent(s string) string {
+	return strings.ToLower(strings.Replace(s, " ", "", -1))
+}
+
 // PageSlice manipulation
 
 func (pages PageSlice) Get(i int) *Page { return pages[i] }

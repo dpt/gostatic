@@ -15,6 +15,7 @@ import (
 
 type PageHeader struct {
 	Title     string
+	Section   []string
 	Tags      []string
 	Date      time.Time
 	Hide      bool
