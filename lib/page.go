@@ -355,6 +355,10 @@ func (pages PageSlice) Len() int {
 func (pages PageSlice) Less(i, j int) bool {
 	left := pages.Get(i)
 	right := pages.Get(j)
+
+	if left.PageOrder != nil && right.PageOrder != nil {
+		return *left.PageOrder < *right.PageOrder
+	}
 	if left.Date.Unix() == right.Date.Unix() {
 		return left.Path > right.Path
 	}

@@ -14,11 +14,12 @@ import (
 )
 
 type PageHeader struct {
-	Title string
-	Tags  []string
-	Date  time.Time
-	Hide  bool
-	Other map[string]string
+	Title     string
+	Tags      []string
+	Date      time.Time
+	Hide      bool
+	PageOrder *int
+	Other     map[string]string
 }
 
 var DATEFORMATS = []string{
@@ -77,6 +78,10 @@ func (cfg *PageHeader) SetValue(key string, value string, s *reflect.Value) {
 	switch typ := f.Interface().(type) {
 	default:
 		errhandle(fmt.Errorf("unknown type of field %s (is type '%v')", key, typ))
+	case *int:
+		i, err := strconv.Atoi(strings.TrimSpace(value))
+		errhandle(err)
+		f.Set(reflect.ValueOf(&i))
 	case string:
 		f.SetString(value)
 	case bool:
