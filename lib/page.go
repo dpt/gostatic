@@ -420,6 +420,18 @@ func (pages PageSlice) Children(root string) *PageSlice {
 	return &children
 }
 
+func (pages PageSlice) ChildrenInSection(section []string) *PageSlice {
+	siblings := make(PageSlice, 0)
+
+	for _, page := range pages {
+		if strings.Join(page.Section, "::") == strings.Join(section, "::") {
+			siblings = append(siblings, page)
+		}
+	}
+
+	return &siblings
+}
+
 func (pages PageSlice) WithTag(tag string) *PageSlice {
 	tagged := make(PageSlice, 0)
 
